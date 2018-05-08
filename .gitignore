@@ -1,2 +1,4 @@
 #Keys
 strategies/apiKey.ini
+
+strategies/*.ini
