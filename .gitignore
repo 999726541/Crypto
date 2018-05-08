@@ -1,4 +1,3 @@
 #Keys
-strategies/apiKey.ini
-
-strategies/*.ini
+/strategies/apiKey.ini
+.idea/
