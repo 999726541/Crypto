@@ -27,6 +27,7 @@ class binance_wrapper(BinanceSocketManager):
         self.processing_order = False
 
     def process_depth_message(self,msg):
+        if self.processing_order: return ''
         msg['TS'] = time.strftime('%Y-%m-%d %T')
         j_str = json.dumps(msg) + '\n'
         open('depth.p','a').write(j_str)
@@ -43,8 +44,8 @@ class binance_wrapper(BinanceSocketManager):
                 time.sleep(2)
                 my_orders = self._client.get_open_orders()
                 time.sleep(1)
-                number_of_one_side_order = abs(len([i['side'] for i in my_orders if i['side'] == 'SELL']) - \
-                                               len([i['side'] for i in my_orders if i['side'] == 'BUY']))
+                number_of_one_side_order = abs(len([i['side'] for i in my_orders if i['side'] == 'SELL' and i['symbol'] == 'LOOMETH']) - \
+                                               len([i['side'] for i in my_orders if i['side'] == 'BUY' and i['symbol'] == 'LOOMETH']))
                 if number_of_one_side_order < 6 and len(my_orders) < 10:
                     self.trade_count += 1
                     self._client.order_limit_buy(symbol = 'LOOMETH',quantity = 88, price = str(_bid))
