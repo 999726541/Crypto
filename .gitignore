@@ -1,3 +1,9 @@
 #Keys
 /strategies/apiKey.ini
 .idea/
+/strategies/xxx.p
+/strategies/depth.p
+/strategies/tradeRecords
+/strategies/acct
+Binance/__pycache__/
+/strategies/tradeRecord
