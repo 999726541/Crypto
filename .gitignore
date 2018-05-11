@@ -7,3 +7,4 @@
 /strategies/acct
 Binance/__pycache__/
 /strategies/tradeRecord
+/strategies/*.p
