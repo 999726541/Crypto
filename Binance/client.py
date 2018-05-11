@@ -609,7 +609,6 @@ class Client(object):
         if start_str is not None and last_id is not None:
             raise ValueError(
                 'start_time and last_id may not be simultaneously specified.')
-
         # If there's no last_id, get one.
         if last_id is None:
             # Without a last_id, we actually need the first trade.  Normally,

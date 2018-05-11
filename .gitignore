@@ -8,3 +8,5 @@
 Binance/__pycache__/
 /strategies/tradeRecord
 /strategies/*.p
+strategies/EOSETHtradeRecord.p
+strategies/EoStradeRecord.p
