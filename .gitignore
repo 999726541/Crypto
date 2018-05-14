@@ -10,3 +10,4 @@ Binance/__pycache__/
 /strategies/*.p
 strategies/EOSETHtradeRecord.p
 strategies/EoStradeRecord.p
+/strategies/LOOMETH_PAIR_STUDY.csv
