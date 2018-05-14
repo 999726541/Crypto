@@ -4,9 +4,10 @@ __author__ = 'Leo Tao'
 # ===============================================================================
 # LIBRARIES
 # ===============================================================================
+import os,sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from Binance.client import Client
 import configparser
-import os
 import time
 from Binance.websockets import BinanceSocketManager
 import json
@@ -18,7 +19,7 @@ import threading
 class binance_wrapper(BinanceSocketManager):
     def __init__(self):
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__)) + '/apiKey.ini')
+        config.read('apiKey.ini')
         api_key = config.get('binance_02','api_key')
         api_secret = config.get('binance_02','api_secret')
 
@@ -33,8 +34,8 @@ class binance_wrapper(BinanceSocketManager):
         j_str = json.dumps(msg) + '\n'
         open(self.trade_symbol+'depth.p','a').write(j_str)
 
-        _bid = round(float(msg['bids'][self.trade_depth][0]) * 1.00001,6)
-        _ask = round(float(msg['asks'][self.trade_depth][0]) * 0.99999,6)
+        _bid = round(float(msg['bids'][self.trade_depth][0]) * 1.00001,8)
+        _ask = round(float(msg['asks'][self.trade_depth][0]) * 0.99999,8)
         fee = _bid*0.0005 + _ask*0.0005
 
 
@@ -42,7 +43,7 @@ class binance_wrapper(BinanceSocketManager):
 
         print(time.strftime('%Y-%m-%d %T'),'XXXXX++> bid : %s,ask : %s, cost/profit : %s, profit : %s ETH'%
               (_bid,_ask, fee/profit,( profit - fee )*88))
-        if profit != 0:
+        if profit > 0:
             if fee / profit < self.trade_margin and self.processing_order is False:
                 dic = {
                     'bid':_bid,
@@ -69,7 +70,7 @@ class binance_wrapper(BinanceSocketManager):
         # Lock the order
         self.processing_order = True
         time.sleep(2)
-        if self.simple_risk():
+        if self.simple_risk(bid,ask):
             self.trade_count += 1
             self._client.order_limit_buy(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(bid))
             self._client.order_limit_sell(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(ask))
@@ -80,7 +81,7 @@ class binance_wrapper(BinanceSocketManager):
                                                                                                    self.trade_quantity * (
                                                                                                    profit - fee)))
         # in order to separate order
-        time.sleep(60)
+        time.sleep(60*4)
         self.processing_order = False
 
 
@@ -99,20 +100,73 @@ class binance_wrapper(BinanceSocketManager):
         pass
         # @TODO
 
-    def simple_risk(self):
+    def simple_risk(self,bid,ask):
         my_orders = self._client.get_open_orders()
         my_orders_len = len([i['side'] for i in my_orders if i['symbol'] == self.trade_symbol])
         time.sleep(1)
+
+        # check order, if too long not touched, reset price
+        serverTs = self._client.get_server_time()
+        # How many hours after the open order exist, if too long, reset order
+        overTime = 1
+        reset_sell_order = \
+            [i for i in my_orders if
+         (i['symbol'] == self.trade_symbol) and ((serverTs['serverTime'] - i['time']) / 1000 / 3600) > overTime and
+         i['side']=='SELL']
+
+        reset_buy_order = \
+            [i for i in my_orders if
+         (i['symbol'] == self.trade_symbol) and ((serverTs['serverTime'] - i['time']) / 1000 / 3600) > overTime and
+         i['side']=='BUY']
+
+        # to full fill minimum notional order
+        minimum_order = 0
+
+
+        for buy_order in reset_buy_order:
+
+            q = float(buy_order['origQty']) - float(buy_order['executedQty'])
+            if q < 100:
+                minimum_order = q
+                continue
+            self._client.cancel_order(symbol = self.trade_symbol, orderId = buy_order['orderId'])
+            time.sleep(0.5)
+            self._client.order_limit_buy(symbol=self.trade_symbol,
+                                         quantity=q + minimum_order,
+                                         price=str(bid))
+            minimum_order = 0
+            time.sleep(0.5)
+            print('RESETTING       BUY      ORDER ..... @ ',bid )
+
+
+
+        for sell_order in reset_sell_order:
+            print('RESETTING ORDER .....', sell_order)
+            q = float(sell_order['origQty']) - float(sell_order['executedQty'])
+            if q < 100:
+                minimum_order = q
+                continue
+            self._client.cancel_order(symbol = self.trade_symbol, orderId = sell_order['orderId'])
+            time.sleep(0.5)
+            self._client.order_limit_sell(symbol=self.trade_symbol,
+                                         quantity=q + minimum_order,
+                                         price=str(ask))
+            minimum_order = 0
+            time.sleep(0.5)
+            print('RESETTING       BUY      ORDER ..... @ ', ask)
+
+
         number_of_one_side_order = abs(
             len([i['side'] for i in my_orders if i['side'] == 'SELL' and i['symbol'] == self.trade_symbol]) - \
             len([i['side'] for i in my_orders if i['side'] == 'BUY' and i['symbol'] == self.trade_symbol]))
+
+
+        # setup waiting time
+        # keep not too much order at same time
+        # wait for order number * 10 sec
         return number_of_one_side_order < self.trade_numOrder and my_orders_len < self.trade_numOrder*2
 
-def read_last_line_data(symbol):
-    head = open(symbol + 'tradeRecord','r').readlines()
-    i = head[-3]
-    a = json.loads(i)
-    print(a)
+
 
 def print_message(msg):
     print(msg)
@@ -123,7 +177,8 @@ if __name__ == '__main__':
     s = binance_wrapper()
     # print(s._client.get_order_book(symbol='LOOMETH'))
     s.start_trade('LOOMETH')
-    s.start_depth('LOOMETH',88,0.17,0,7)
-    # s.start_trade('EOSETH')
-    # s.start_depth('EOSETH', 4.88, 0.52, 1, 10)
+    s.start_depth('LOOMETH', 100, 0.4, 0, 7)
+    # s.start_trade('ZILETH')
+    # s.start_depth('ZILETH', 350, 0.48, 0, 6)
     s.run()
+    s.close()
