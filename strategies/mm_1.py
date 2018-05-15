@@ -108,7 +108,7 @@ class binance_wrapper(BinanceSocketManager):
         # check order, if too long not touched, reset price
         serverTs = self._client.get_server_time()
         # How many hours after the open order exist, if too long, reset order
-        overTime = 1
+        overTime = 6
         reset_sell_order = \
             [i for i in my_orders if
          (i['symbol'] == self.trade_symbol) and ((serverTs['serverTime'] - i['time']) / 1000 / 3600) > overTime and

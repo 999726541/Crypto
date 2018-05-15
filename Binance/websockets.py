@@ -509,6 +509,9 @@ class BinanceSocketManager(threading.Thread):
         except ReactorAlreadyRunning:
             # Ignore error about reactor already running
             pass
+        except Exception as e:
+            print(e)
+            self.close()
 
     def close(self):
         """Close all connections
