@@ -70,18 +70,21 @@ class binance_wrapper(BinanceSocketManager):
         # Lock the order
         self.processing_order = True
         time.sleep(2)
-        if self.simple_risk(bid,ask):
-            self.trade_count += 1
-            self._client.order_limit_buy(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(bid))
-            self._client.order_limit_sell(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(ask))
-            print(time.strftime('%Y-%m-%d %T'),
-                  'trade %s ++> SET =====> |||| bid : %s,ask : %s, fees : %s, profit : %s ||||' % (self.trade_count
-                                                                                                   , bid, ask,
-                                                                                                   fee * self.trade_quantity,
-                                                                                                   self.trade_quantity * (
-                                                                                                   profit - fee)))
-        # in order to separate order
-        time.sleep(60*4)
+        try:
+            if self.simple_risk(bid,ask):
+                self.trade_count += 1
+                self._client.order_limit_buy(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(bid))
+                self._client.order_limit_sell(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(ask))
+                print(time.strftime('%Y-%m-%d %T'),
+                      'trade %s ++> SET =====> |||| bid : %s,ask : %s, fees : %s, profit : %s ||||' % (self.trade_count
+                                                                                                       , bid, ask,
+                                                                                                       fee * self.trade_quantity,
+                                                                                                       self.trade_quantity * (
+                                                                                                       profit - fee)))
+            # in order to separate order
+            time.sleep(8)
+        except Exception as e:
+            print(e)
         self.processing_order = False
 
 
@@ -108,7 +111,7 @@ class binance_wrapper(BinanceSocketManager):
         # check order, if too long not touched, reset price
         serverTs = self._client.get_server_time()
         # How many hours after the open order exist, if too long, reset order
-        overTime = 6
+        overTime = 48
         reset_sell_order = \
             [i for i in my_orders if
          (i['symbol'] == self.trade_symbol) and ((serverTs['serverTime'] - i['time']) / 1000 / 3600) > overTime and
@@ -176,9 +179,9 @@ def print_message(msg):
 if __name__ == '__main__':
     s = binance_wrapper()
     # print(s._client.get_order_book(symbol='LOOMETH'))
-    s.start_trade('LOOMETH')
-    s.start_depth('LOOMETH', 100, 0.4, 0, 7)
-    # s.start_trade('ZILETH')
-    # s.start_depth('ZILETH', 350, 0.48, 0, 6)
+    # s.start_trade('LOOMETH')
+    # s.start_depth('LOOMETH', 130, 0.3, 0, 14)
+    s.start_trade('ETHUSDT')
+    s.start_depth('ETHUSDT', 0.1, 0.1, 0, 6)
     s.run()
     s.close()
