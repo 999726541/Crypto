@@ -4,10 +4,11 @@ __author__ = 'Leo Tao'
 # ===============================================================================
 # LIBRARIES
 # ===============================================================================
-import os,sys
+import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from Binance.client import Client
 import configparser
+import os
 import time
 from Binance.websockets import BinanceSocketManager
 import json
@@ -19,7 +20,7 @@ import threading
 class binance_wrapper(BinanceSocketManager):
     def __init__(self):
         config = configparser.ConfigParser()
-        config.read('apiKey.ini')
+        config.read(os.path.join(os.path.dirname(__file__)) + '/apiKey.ini')
         api_key = config.get('binance_02','api_key')
         api_secret = config.get('binance_02','api_secret')
 
@@ -34,8 +35,8 @@ class binance_wrapper(BinanceSocketManager):
         j_str = json.dumps(msg) + '\n'
         open(self.trade_symbol+'depth.p','a').write(j_str)
 
-        _bid = round(float(msg['bids'][self.trade_depth][0]) * 1.00001,8)
-        _ask = round(float(msg['asks'][self.trade_depth][0]) * 0.99999,8)
+        _bid = round(float(msg['bids'][self.trade_depth][0]) * 1.00001,6)
+        _ask = round(float(msg['asks'][self.trade_depth][0]) * 0.99999,6)
         fee = _bid*0.0005 + _ask*0.0005
 
 
@@ -43,7 +44,7 @@ class binance_wrapper(BinanceSocketManager):
 
         print(time.strftime('%Y-%m-%d %T'),'XXXXX++> bid : %s,ask : %s, cost/profit : %s, profit : %s ETH'%
               (_bid,_ask, fee/profit,( profit - fee )*88))
-        if profit > 0:
+        if profit != 0:
             if fee / profit < self.trade_margin and self.processing_order is False:
                 dic = {
                     'bid':_bid,
@@ -58,33 +59,30 @@ class binance_wrapper(BinanceSocketManager):
     def process_trade_message(self,msg):
         msg['TS'] = time.strftime('%Y-%m-%d %T')
         j_str = json.dumps(msg) + '\n'
-        open(self.trade_symbol+'tradeRecord.p', 'a').write(j_str)
+        open(self.trade_symbol+'tradeRecord', 'a').write(j_str)
 
-
-
-    def print_message(self,msg):
-        print(msg)
 
     def _process_my_order(self,bid, ask, fee, profit):
         print('processing order .........')
-        # Lock the order
         self.processing_order = True
         time.sleep(2)
-        try:
-            if self.simple_risk(bid,ask):
-                self.trade_count += 1
-                self._client.order_limit_buy(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(bid))
-                self._client.order_limit_sell(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(ask))
-                print(time.strftime('%Y-%m-%d %T'),
-                      'trade %s ++> SET =====> |||| bid : %s,ask : %s, fees : %s, profit : %s ||||' % (self.trade_count
-                                                                                                       , bid, ask,
-                                                                                                       fee * self.trade_quantity,
-                                                                                                       self.trade_quantity * (
-                                                                                                       profit - fee)))
-            # in order to separate order
-            time.sleep(8)
-        except Exception as e:
-            print(e)
+        my_orders = self._client.get_open_orders()
+        my_orders_len = len([i['side'] for i in my_orders if i['symbol'] == self.trade_symbol])
+        time.sleep(1)
+        number_of_one_side_order = abs(
+            len([i['side'] for i in my_orders if i['side'] == 'SELL' and i['symbol'] == self.trade_symbol]) - \
+            len([i['side'] for i in my_orders if i['side'] == 'BUY' and i['symbol'] == self.trade_symbol]))
+        if number_of_one_side_order < self.trade_numOrder and my_orders_len < self.trade_numOrder*2:
+            self.trade_count += 1
+            self._client.order_limit_buy(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(bid))
+            self._client.order_limit_sell(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(ask))
+            print(time.strftime('%Y-%m-%d %T'),
+                  'trade %s ++> SET =====> |||| bid : %s,ask : %s, fees : %s, profit : %s ||||' % (self.trade_count
+                                                                                                   , bid, ask,
+                                                                                                   fee * self.trade_quantity,
+                                                                                                   self.trade_quantity * (
+                                                                                                   profit - fee)))
+        time.sleep(60)
         self.processing_order = False
 
 
@@ -99,89 +97,29 @@ class binance_wrapper(BinanceSocketManager):
     def start_trade(self, symbol):
         self.start_trade_socket(symbol, self.process_trade_message)
 
-    def find_bid_ask_skewness(self):
-        pass
-        # @TODO
 
-    def simple_risk(self,bid,ask):
-        my_orders = self._client.get_open_orders()
-        my_orders_len = len([i['side'] for i in my_orders if i['symbol'] == self.trade_symbol])
-        time.sleep(1)
-
-        # check order, if too long not touched, reset price
-        serverTs = self._client.get_server_time()
-        # How many hours after the open order exist, if too long, reset order
-        overTime = 48
-        reset_sell_order = \
-            [i for i in my_orders if
-         (i['symbol'] == self.trade_symbol) and ((serverTs['serverTime'] - i['time']) / 1000 / 3600) > overTime and
-         i['side']=='SELL']
-
-        reset_buy_order = \
-            [i for i in my_orders if
-         (i['symbol'] == self.trade_symbol) and ((serverTs['serverTime'] - i['time']) / 1000 / 3600) > overTime and
-         i['side']=='BUY']
-
-        # to full fill minimum notional order
-        minimum_order = 0
+def read_data():
+    for i in open('depth.p','r').readlines():
+        a = json.loads(i)
+        print(a['TS'])
 
 
-        for buy_order in reset_buy_order:
-
-            q = float(buy_order['origQty']) - float(buy_order['executedQty'])
-            if q < 100:
-                minimum_order = q
-                continue
-            self._client.cancel_order(symbol = self.trade_symbol, orderId = buy_order['orderId'])
-            time.sleep(0.5)
-            self._client.order_limit_buy(symbol=self.trade_symbol,
-                                         quantity=q + minimum_order,
-                                         price=str(bid))
-            minimum_order = 0
-            time.sleep(0.5)
-            print('RESETTING       BUY      ORDER ..... @ ',bid )
-
-
-
-        for sell_order in reset_sell_order:
-            print('RESETTING ORDER .....', sell_order)
-            q = float(sell_order['origQty']) - float(sell_order['executedQty'])
-            if q < 100:
-                minimum_order = q
-                continue
-            self._client.cancel_order(symbol = self.trade_symbol, orderId = sell_order['orderId'])
-            time.sleep(0.5)
-            self._client.order_limit_sell(symbol=self.trade_symbol,
-                                         quantity=q + minimum_order,
-                                         price=str(ask))
-            minimum_order = 0
-            time.sleep(0.5)
-            print('RESETTING       BUY      ORDER ..... @ ', ask)
-
-
-        number_of_one_side_order = abs(
-            len([i['side'] for i in my_orders if i['side'] == 'SELL' and i['symbol'] == self.trade_symbol]) - \
-            len([i['side'] for i in my_orders if i['side'] == 'BUY' and i['symbol'] == self.trade_symbol]))
-
-
-        # setup waiting time
-        # keep not too much order at same time
-        # wait for order number * 10 sec
-        return number_of_one_side_order < self.trade_numOrder and my_orders_len < self.trade_numOrder*2
-
-
-
-def print_message(msg):
-    print(msg)
-
+def trade():
+    config = configparser.ConfigParser()
+    config.read(os.path.join(os.path.dirname(__file__)) + '/apiKey.ini')
+    api_key = config.get('binance_02', 'api_key')
+    api_secret = config.get('binance_02', 'api_secret')
+    client = Client(api_key, api_secret)
+    #client.order_limit_sell(symbol = 'LOOMETH',quantity = 8, price ='0.00088180')
+    a = client.get_open_orders()
+    print(a)
 
 
 if __name__ == '__main__':
     s = binance_wrapper()
-    # print(s._client.get_order_book(symbol='LOOMETH'))
-    # s.start_trade('LOOMETH')
-    # s.start_depth('LOOMETH', 130, 0.3, 0, 14)
-    s.start_trade('ETHUSDT')
-    s.start_depth('ETHUSDT', 0.1, 0.1, 0, 6)
+    s.start_trade('LOOMETH')
+    s.start_depth('LOOMETH',88,0.20,0,10)
+    # s.start_trade('EOSETH')
+    # s.start_depth('EOSETH', 4.88, 0.52, 1, 10)
     s.run()
-    s.close()
+    # trade()
