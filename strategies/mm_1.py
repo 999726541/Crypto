@@ -13,6 +13,7 @@ import time
 from Binance.websockets import BinanceSocketManager
 import json
 import threading
+import numpy as np
 # ===============================================================================
 # ===============================================================================
 
@@ -20,9 +21,9 @@ import threading
 class binance_wrapper(BinanceSocketManager):
     def __init__(self):
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__)) + '/apiKey.ini')
-        api_key = config.get('binance_02','api_key')
-        api_secret = config.get('binance_02','api_secret')
+        config.read(os.path.join(os.path.dirname(__file__),'.') + '/apiKey.ini')
+        api_key = config.get('binance_03','api_key')
+        api_secret = config.get('binance_03','api_secret')
 
         client = Client(api_key, api_secret)
         BinanceSocketManager.__init__(self,client)
@@ -72,6 +73,7 @@ class binance_wrapper(BinanceSocketManager):
         number_of_one_side_order = abs(
             len([i['side'] for i in my_orders if i['side'] == 'SELL' and i['symbol'] == self.trade_symbol]) - \
             len([i['side'] for i in my_orders if i['side'] == 'BUY' and i['symbol'] == self.trade_symbol]))
+        print('total order : %s, on side order : %s'%(my_orders_len,number_of_one_side_order))
         if number_of_one_side_order < self.trade_numOrder and my_orders_len < self.trade_numOrder*2:
             self.trade_count += 1
             self._client.order_limit_buy(symbol=self.trade_symbol, quantity=self.trade_quantity, price=str(bid))
@@ -82,7 +84,7 @@ class binance_wrapper(BinanceSocketManager):
                                                                                                    fee * self.trade_quantity,
                                                                                                    self.trade_quantity * (
                                                                                                    profit - fee)))
-        time.sleep(60)
+        time.sleep(60*np.e*my_orders_len/1.5+60)
         self.processing_order = False
 
 
@@ -117,9 +119,11 @@ def trade():
 
 if __name__ == '__main__':
     s = binance_wrapper()
+    # s.start_trade('ZRXETH')
+    # s.start_depth('ZRXETH',100,0.35,0,4)
     s.start_trade('LOOMETH')
-    s.start_depth('LOOMETH',88,0.20,0,10)
-    # s.start_trade('EOSETH')
-    # s.start_depth('EOSETH', 4.88, 0.52, 1, 10)
+    s.start_depth('LOOMETH', 300, 0.3, 0, 3)
+    # s.start_trade('CMTETH')
+    # s.start_depth('CMTETH', 300, 0.3, 0, 4)
     s.run()
     # trade()

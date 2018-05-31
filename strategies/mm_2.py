@@ -48,8 +48,8 @@ class huobi_manager(HuobiSocketManager):
         :param id_:
         :return:
         '''
-        self.start_market_depth(symbol,id_,self.depth_data_handler,step=1)
+        self.start_market_depth(symbol,id_,self.depth_data_handler,step=0)
 
 if __name__ == '__main__':
     huobi = huobi_manager()
-    huobi.streaming_depth('ethusdt','123')
+    huobi.streaming_depth('zrxeth','123')
